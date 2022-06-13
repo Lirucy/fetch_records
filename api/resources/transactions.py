@@ -27,18 +27,23 @@ def spend_points(pts):
         payer_records = []
         if points_to_spend <= total_pts:
             for record in sorted_transactions:
+                diff_pts = get_payer_balance(record['payer']) - points_to_spend
                 if get_payer_balance(record['payer']) == 0:
                     continue
                 elif get_payer_balance(record['payer']) < points_to_spend:
-                    payer_records = update_payer_records(payer_records, record, get_payer_balance(record['payer']))
                     points_to_spend -= get_payer_balance(record['payer'])
+                    payer_records = update_payer_records(payer_records, record, record['points'])
+                    # payer_records = update_payer_records(payer_records, record, get_payer_balance(record['payer']))
+                elif diff_pts < 0:
+                    points_to_spend -= get_payer_balance(record['payer'])
+                    payer_records.append({'payer': record['payer'], 'points': diff_pts})
+                    new_transaction = {'payer': record['payer'], 'points': diff_pts, 'timestamp': datetime.datetime.now()}
+                    transaction_add = Transaction.create(**new_transaction)
+                    model_to_dict(transaction_add)
+                    break
                 elif points_to_spend <= 0:
                     break
-                elif points_to_spend < record['points']:
-                    updated_points = record['points'] - points_to_spend
-                    payer_records = update_payer_records(payer_records, record, updated_points)
-                    break
-                elif points_to_spend == record['points']:
+                elif points_to_spend <= record['points']:
                     payer_records = update_payer_records(payer_records, record, points_to_spend)
                     break
                 elif points_to_spend > record['points'] and record['points'] > 0:
@@ -49,60 +54,23 @@ def spend_points(pts):
         return jsonify(message='Error, spend request'), 500
 
 # Helper function that's injected in each conditional for above sorted_transactions loop 
-
-def update_payer_records(payer_records, record, points_to_add):
+def update_payer_records(payer_records, record, points_to_spend):
     payer = record['payer']
-    points = record['points']
     if not payer_records:
-        payer_records.append({'payer': payer, 'points': -points_to_add})
-        new_transaction = {'payer': payer, 'points': -points_to_add, 'timestamp': datetime.datetime.now()}
-        transaction_add = Transaction.create(**new_transaction)
-        model_to_dict(transaction_add)
+        payer_records.append({'payer': payer, 'points': -points_to_spend})
     else:
-        payer_records.append({'payer': payer, 'points': -points_to_add})
-    new_transaction = {'payer': payer, 'points': -points_to_add, 'timestamp': datetime.datetime.now()}
+        updated = False
+        for payer_record in payer_records:
+            if payer_record['payer'] == payer:
+                payer_records = {'payer': payer, 'points': payer_record['points'] - points_to_spend}
+                updated = True
+        if not updated:
+            payer_records.append({'payer': payer, 'points': -points_to_spend})
+    new_transaction = {'payer': payer, 'points': -points_to_spend, 'timestamp': datetime.datetime.now()}
     transaction_add = Transaction.create(**new_transaction)
     model_to_dict(transaction_add)
     return payer_records
 
-
-# def update_payer_records(payer_records, record, points_to_add):
-#     payer = record['payer']
-#     points = record['points']
-#     if not payer_records:
-#         if points_to_add - points == 0:
-#             payer_records.append({'payer': payer, 'points': -points})
-#         else:
-#             payer_records.append({'payer': payer, 'points': points_to_add - points})
-#     else:
-#         updated = False
-#         for record in payer_records:
-#             if record['points'] < 0:
-#                 continue
-#             if record['payer'] == payer:
-#                 points = record['points']
-#                 record.update({'points': points - points_to_add})
-#                 updated = True
-#                 break
-#         if not updated:
-#             if points > points_to_add:
-#                 updated_pts = points - points_to_add
-#                 payer_records.append({'payer': payer, 'points': -updated_pts})
-#             else:
-#                 payer_records.append({'payer': payer, 'points': -points_to_add})
-#     if points_to_add - points == 0:
-#         new_transaction = {'payer': payer, 'points': -points, 'timestamp': datetime.datetime.now()}
-#         transaction_add = Transaction.create(**new_transaction)
-#         model_to_dict(transaction_add)
-#     elif points_to_add - points > 0:
-#         new_transaction = {'payer': payer, 'points': points, 'timestamp': datetime.datetime.now()}
-#         transaction_add = Transaction.create(**new_transaction)
-#         model_to_dict(transaction_add)
-#     else:
-#         new_transaction = {'payer': payer, 'points': points_to_add - points, 'timestamp': datetime.datetime.now()}
-#         transaction_add = Transaction.create(**new_transaction)
-#         model_to_dict(transaction_add)
-#     return payer_records
 def get_payer_balance(payer):
     all_transactions = [model_to_dict(transaction) for transaction in Transaction.select()]
     balance = 0
@@ -163,6 +131,22 @@ def delete_all_transactions():
         return jsonify(message='Transactions successfully removed'), 200
     except DoesNotExist:
         return jsonify(message='Error deleting transactions'), 500
+
+@transaction.route('/delete_seed', methods=['GET'])
+def delete_seed_transactions():
+    try:
+        all_transactions = [model_to_dict(transaction) for transaction in Transaction.select()]
+        sorted_transactions = sorted(all_transactions, key=lambda a: a['timestamp'])
+        for record in sorted_transactions:
+            if record['id']:
+                (Transaction
+                    .delete()
+                    .where(Transaction.id == record['id'])
+                    .execute())
+        return jsonify(message='Transactions successfully removed'), 200
+    except DoesNotExist:
+        return jsonify(message='Error deleting transactions'), 500
+
 
 # Route to get an individual transaction by id
 @transaction.route('/<int:id>', methods=['GET'])
