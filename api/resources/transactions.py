@@ -65,7 +65,9 @@ def spend_points(pts):
 # Helper function that's injected in each conditional for above sorted_transactions loop 
 def update_payer_records(payer_records, record, points_to_spend):
     payer = record['payer']
-    if not payer_records:
+    if payer_records:
+        payer_records.append({'payer': payer, 'points': -points_to_spend})
+    elif not payer_records:
         payer_records.append({'payer': payer, 'points': -points_to_spend})
     else:
         updated = False
@@ -104,7 +106,7 @@ def get_payer_balances():
                 balance[payer] += record['points']
     return jsonify(balance)
 
-# These are some additional routes that I added to aid in debugging
+# These are some additional routes that I added to aid in debugging/testing for edge cases
 
 # Route to get all transactions sorted by date/time
 @transaction.route('/')
