@@ -30,10 +30,19 @@ def spend_points(pts):
                 diff_pts = get_payer_balance(record['payer']) - points_to_spend
                 if get_payer_balance(record['payer']) == 0:
                     continue
-                elif get_payer_balance(record['payer']) < points_to_spend:
-                    points_to_spend -= get_payer_balance(record['payer'])
+                elif record['points'] < 0:
+                    continue
+                elif points_to_spend > record['points']:
                     payer_records = update_payer_records(payer_records, record, record['points'])
-                    # payer_records = update_payer_records(payer_records, record, get_payer_balance(record['payer']))
+                    points_to_spend -= record['points']
+
+                # elif record['points'] < points_to_spend:
+                #     points_to_spend -= record['points']
+                #     payer_records = update_payer_records(payer_records, record, record['points'])
+
+                # elif get_payer_balance(record['payer']) < points_to_spend:
+                #     points_to_spend -= get_payer_balance(record['payer'])
+                #     payer_records = update_payer_records(payer_records, record, get_payer_balance(record['payer']))
                 elif diff_pts < 0:
                     points_to_spend -= get_payer_balance(record['payer'])
                     payer_records.append({'payer': record['payer'], 'points': diff_pts})
@@ -46,9 +55,9 @@ def spend_points(pts):
                 elif points_to_spend <= record['points']:
                     payer_records = update_payer_records(payer_records, record, points_to_spend)
                     break
-                elif points_to_spend > record['points'] and record['points'] > 0:
-                    payer_records = update_payer_records(payer_records, record, record['points'])
-                    points_to_spend -= record['points']
+                # elif points_to_spend > record['points'] and record['points'] > 0:
+                #     payer_records = update_payer_records(payer_records, record, record['points'])
+                #     points_to_spend -= record['points']
         return jsonify(payer_records)
     except DoesNotExist:
         return jsonify(message='Error, spend request'), 500
@@ -63,7 +72,10 @@ def update_payer_records(payer_records, record, points_to_spend):
         for payer_record in payer_records:
             if payer_record['payer'] == payer:
                 payer_records = {'payer': payer, 'points': payer_record['points'] - points_to_spend}
+                points_to_spend += payer_record['points']
                 updated = True
+                if updated and points_to_spend > payer_record['points']:
+                    points_to_spend -= payer_record['points']
         if not updated:
             payer_records.append({'payer': payer, 'points': -points_to_spend})
     new_transaction = {'payer': payer, 'points': -points_to_spend, 'timestamp': datetime.datetime.now()}
